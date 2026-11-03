@@ -6,27 +6,25 @@ namespace F1Cache.Core.Managers;
 public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
     where TKey : notnull
 {
-    private readonly Dictionary<TKey, CacheEntry<TValue>> _cache = new();
+    private readonly Dictionary<TKey, CacheEntry<TValue>> _cache = [];
 
-    public void Set(TKey key, TValue value)
-    {
-        _cache[key] = new CacheEntry<TValue>(value);
-    }
+    public void Set(TKey key, TValue item) =>
+        _cache[key] = new CacheEntry<TValue>(item);
 
-    public bool TryGet(TKey key, out TValue value)
+    public bool TryGet(TKey key, out TValue result)
     {
         if (_cache.TryGetValue(key, out var entry))
         {
             if (!entry.IsExpired())
             {
-                value = entry.Value;
+                result = entry.Value;
                 return true;
             }
 
             _cache.Remove(key);
         }
 
-        value = default!;
+        result = default!;
         return false;
     }
 

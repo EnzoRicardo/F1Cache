@@ -1,31 +1,24 @@
 namespace F1Cache.Core.Models;
 
+/// <summary>
+/// Internal container that holds a cached item along with its expiration metadata.
+/// </summary>
 internal class CacheEntry<TValue>
 {
     public TValue Value { get; }
-
     public DateTimeOffset? ExpiresAt { get; }
 
-    public CacheEntry(TValue value, TimeSpan? ttl = null)
+    public CacheEntry(TValue data, TimeSpan? timeToLive = null)
     {
-        if (ttl.HasValue && ttl.Value < TimeSpan.Zero)
+        if (timeToLive is { } duration)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(ttl),
-                "TTL não pode ser negativo."
-            );
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(duration, TimeSpan.Zero, nameof(timeToLive));
+            ExpiresAt = DateTimeOffset.UtcNow.Add(duration);
         }
 
-        Value = value;
-
-        ExpiresAt = ttl.HasValue
-            ? DateTimeOffset.UtcNow.Add(ttl.Value)
-            : null;
+        Value = data;
     }
 
-    public bool IsExpired()
-    {
-        return ExpiresAt.HasValue &&
-               DateTimeOffset.UtcNow >= ExpiresAt.Value;
-    }
+    public bool IsExpired() =>
+        ExpiresAt.HasValue && DateTimeOffset.UtcNow >= ExpiresAt.Value;
 }

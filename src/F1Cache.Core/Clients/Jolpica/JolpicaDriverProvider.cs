@@ -33,9 +33,9 @@ public class JolpicaDriverProvider(HttpClient httpClient) : IDriverProvider
 
     public async Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
         ArgumentOutOfRangeException.ThrowIfNegative(limit);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
-        ArgumentOutOfRangeException.ThrowIfNegative(offset);
 
         var url = $"{BaseUrl}drivers.json?limit={limit}&offset={offset}";
 

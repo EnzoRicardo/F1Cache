@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
 
@@ -6,10 +7,21 @@ namespace F1Cache.Core.Managers;
 public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
     where TKey : notnull
 {
-    private readonly Dictionary<TKey, CacheEntry<TValue>> _cache = [];
+    public static readonly TimeSpan DefaultTimeToLive = TimeSpan.FromMinutes(1);
 
-    public void Set(TKey key, TValue item) =>
-        _cache[key] = new CacheEntry<TValue>(item);
+    private readonly ConcurrentDictionary<TKey, CacheEntry<TValue>> _cache = new();
+    private readonly TimeSpan _defaultTimeToLive;
+    private readonly TimeProvider _timeProvider;
+
+    public CacheManager(TimeSpan? defaultTimeToLive = null, TimeProvider? timeProvider = null)
+    {
+        _defaultTimeToLive = defaultTimeToLive ?? DefaultTimeToLive;
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(_defaultTimeToLive, TimeSpan.Zero, nameof(defaultTimeToLive));
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public void Set(TKey key, TValue item, TimeSpan? timeToLive = null) =>
+        _cache[key] = new CacheEntry<TValue>(item, timeToLive ?? _defaultTimeToLive, _timeProvider);
 
     public bool TryGet(TKey key, out TValue result)
     {
@@ -21,20 +33,14 @@ public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
                 return true;
             }
 
-            _cache.Remove(key);
+            _cache.TryRemove(KeyValuePair.Create(key, entry));
         }
 
         result = default!;
         return false;
     }
 
-    public bool Remove(TKey key)
-    {
-        return _cache.Remove(key);
-    }
+    public bool Remove(TKey key) => _cache.TryRemove(key, out _);
 
-    public void Clear()
-    {
-        _cache.Clear();
-    }
+    public void Clear() => _cache.Clear();
 }

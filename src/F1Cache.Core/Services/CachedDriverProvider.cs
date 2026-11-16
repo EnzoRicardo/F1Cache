@@ -9,6 +9,8 @@ namespace F1Cache.Core.Services;
 /// </summary>
 public class CachedDriverProvider(IDriverProvider innerProvider, ICache<string, Driver?> cache) : IDriverProvider
 {
+    internal static readonly TimeSpan NegativeCacheTimeToLive = TimeSpan.FromSeconds(10);
+
     private readonly IDriverProvider _innerProvider = innerProvider ?? throw new ArgumentNullException(nameof(innerProvider));
     private readonly ICache<string, Driver?> _cache = cache ?? throw new ArgumentNullException(nameof(cache));
 
@@ -16,17 +18,16 @@ public class CachedDriverProvider(IDriverProvider innerProvider, ICache<string, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
 
-        // 1. Cache HIT check
         if (_cache.TryGet(driverId, out var cachedDriver))
         {
             return cachedDriver;
         }
 
-        // 2. Cache MISS: delegate to underlying provider
         var driver = await _innerProvider.GetDriverByIdAsync(driverId, cancellationToken);
 
-        // 3. Always store the result to prevent cache penetration
-        _cache.Set(driverId, driver);
+        // Always store the result to prevent cache penetration.
+        // Misses get a short TTL so a driver added upstream shows up quickly.
+        _cache.Set(driverId, driver, driver is null ? NegativeCacheTimeToLive : null);
 
         return driver;
     }

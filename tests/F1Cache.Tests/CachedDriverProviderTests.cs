@@ -89,4 +89,43 @@ public class CachedDriverProviderTests
         Assert.Null(result2);
         Assert.Equal(1, fakeInner.FetchCount); // Still 1, didn't hit provider!
     }
+
+    [Fact]
+    public async Task GetDriverByIdAsync_NegativeEntry_ExpiresAfterTenSeconds()
+    {
+        var clock = new ManualTimeProvider();
+        var fakeInner = new FakeDriverProvider { ResultToReturn = null };
+        var cache = new CacheManager<string, Driver?>(timeProvider: clock);
+        var cachedProvider = new CachedDriverProvider(fakeInner, cache);
+
+        await cachedProvider.GetDriverByIdAsync("nonexistent");
+        clock.Advance(TimeSpan.FromSeconds(9));
+        await cachedProvider.GetDriverByIdAsync("nonexistent");
+        Assert.Equal(1, fakeInner.FetchCount);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await cachedProvider.GetDriverByIdAsync("nonexistent");
+        Assert.Equal(2, fakeInner.FetchCount);
+    }
+
+    [Fact]
+    public async Task GetDriverByIdAsync_FoundDriver_UsesDefaultTtlNotNegativeTtl()
+    {
+        var clock = new ManualTimeProvider();
+        var fakeInner = new FakeDriverProvider
+        {
+            ResultToReturn = new Driver(Id: "alonso", GivenName: "Fernando", FamilyName: "Alonso")
+        };
+        var cache = new CacheManager<string, Driver?>(timeProvider: clock);
+        var cachedProvider = new CachedDriverProvider(fakeInner, cache);
+
+        await cachedProvider.GetDriverByIdAsync("alonso");
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await cachedProvider.GetDriverByIdAsync("alonso");
+        Assert.Equal(1, fakeInner.FetchCount);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await cachedProvider.GetDriverByIdAsync("alonso");
+        Assert.Equal(2, fakeInner.FetchCount);
+    }
 }

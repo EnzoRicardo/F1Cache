@@ -5,20 +5,24 @@ namespace F1Cache.Core.Models;
 /// </summary>
 internal class CacheEntry<TValue>
 {
+    private readonly TimeProvider _timeProvider;
+
     public TValue Value { get; }
     public DateTimeOffset? ExpiresAt { get; }
 
-    public CacheEntry(TValue data, TimeSpan? timeToLive = null)
+    public CacheEntry(TValue data, TimeSpan? timeToLive = null, TimeProvider? timeProvider = null)
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+
         if (timeToLive is { } duration)
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(duration, TimeSpan.Zero, nameof(timeToLive));
-            ExpiresAt = DateTimeOffset.UtcNow.Add(duration);
+            ExpiresAt = _timeProvider.GetUtcNow().Add(duration);
         }
 
         Value = data;
     }
 
     public bool IsExpired() =>
-        ExpiresAt.HasValue && DateTimeOffset.UtcNow >= ExpiresAt.Value;
+        ExpiresAt.HasValue && _timeProvider.GetUtcNow() >= ExpiresAt.Value;
 }

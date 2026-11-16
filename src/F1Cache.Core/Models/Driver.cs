@@ -12,7 +12,8 @@ public record Driver(
     DateOnly? DateOfBirth = null,
     string? Nationality = null,
     string? WikipediaUrl = null,
-    string? ThumbnailUrl = null)
+    string? ThumbnailUrl = null,
+    string? Description = null)
 {
     /// <summary>
     /// Convenient helper returning the full name (e.g., "Fernando Alonso").

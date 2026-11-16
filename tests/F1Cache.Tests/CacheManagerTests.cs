@@ -53,7 +53,7 @@ public class CacheManagerTests
     public void Constructor_WithCustomDefaultTtl_UsesIt()
     {
         var clock = new ManualTimeProvider();
-        var cache = new CacheManager<string, string>(TimeSpan.FromSeconds(30), clock);
+        var cache = new CacheManager<string, string>(TimeSpan.FromSeconds(30), timeProvider: clock);
 
         cache.Set("key", "value");
         clock.Advance(TimeSpan.FromSeconds(30));
@@ -112,8 +112,8 @@ public class CacheManagerTests
     [Fact]
     public async Task ConcurrentSetAndGet_DoesNotThrowOrLoseItems()
     {
-        var cache = new CacheManager<int, int>();
         const int count = 10_000;
+        var cache = new CacheManager<int, int>(capacity: count);
 
         await Task.WhenAll(Enumerable.Range(0, 8).Select(worker => Task.Run(() =>
         {

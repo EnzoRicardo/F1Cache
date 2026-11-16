@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
+using F1Cache.Core.Observers;
 
 namespace F1Cache.Core.Managers;
 
@@ -10,6 +11,7 @@ public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
     public static readonly TimeSpan DefaultTimeToLive = TimeSpan.FromMinutes(1);
 
     private readonly ConcurrentDictionary<TKey, CacheEntry<TValue>> _cache = new();
+    private readonly CacheSubject<TKey> _subject = new();
     private readonly TimeSpan _defaultTimeToLive;
     private readonly TimeProvider _timeProvider;
 
@@ -20,6 +22,10 @@ public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
+    public void Attach(ICacheObserver<TKey> observer) => _subject.Attach(observer);
+
+    public bool Detach(ICacheObserver<TKey> observer) => _subject.Detach(observer);
+
     public void Set(TKey key, TValue item, TimeSpan? timeToLive = null) =>
         _cache[key] = new CacheEntry<TValue>(item, timeToLive ?? _defaultTimeToLive, _timeProvider);
 
@@ -29,13 +35,18 @@ public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
         {
             if (!entry.IsExpired())
             {
+                _subject.NotifyHit(key);
                 result = entry.Value;
                 return true;
             }
 
-            _cache.TryRemove(KeyValuePair.Create(key, entry));
+            if (_cache.TryRemove(KeyValuePair.Create(key, entry)))
+            {
+                _subject.NotifyExpire(key);
+            }
         }
 
+        _subject.NotifyMiss(key);
         result = default!;
         return false;
     }

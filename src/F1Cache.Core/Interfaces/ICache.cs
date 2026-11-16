@@ -1,6 +1,6 @@
 namespace F1Cache.Core.Interfaces;
 
-public interface ICache<TKey, TValue>
+public interface ICache<TKey, TValue> : ICacheSubject<TKey>
     where TKey : notnull
 {
     /// <summary>

@@ -26,6 +26,8 @@ public sealed class F1ClientBuilder
     private readonly List<Func<DelegatingHandler>> _httpHandlerFactories = [];
     private HttpClient? _httpClient;
     private TimeSpan? _httpTimeout;
+    private (int MaxRetries, TimeSpan? BaseDelay, TimeSpan? MaxDelay)? _retryPolicy;
+    private TimeSpan? _rateLimitInterval;
     private HttpMessageHandler? _primaryHttpHandler;
 
     internal F1ClientBuilder()
@@ -81,6 +83,30 @@ public sealed class F1ClientBuilder
     }
 
     /// <summary>
+    /// Configures the built-in retry link. Default: 2 retries, 500 ms base delay (doubling), 5 s max wait.
+    /// Pass 0 retries to remove the link from the chain.
+    /// </summary>
+    public F1ClientBuilder WithRetryPolicy(int maxRetries, TimeSpan? baseDelay = null, TimeSpan? maxDelay = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(maxRetries);
+        if (baseDelay is { } b) ArgumentOutOfRangeException.ThrowIfLessThan(b, TimeSpan.Zero, nameof(baseDelay));
+        if (maxDelay is { } m) ArgumentOutOfRangeException.ThrowIfLessThan(m, TimeSpan.Zero, nameof(maxDelay));
+        _retryPolicy = (maxRetries, baseDelay, maxDelay);
+        return this;
+    }
+
+    /// <summary>
+    /// Minimum time between two requests to the same host. Default: 250 ms (4 requests/second).
+    /// Pass <see cref="TimeSpan.Zero"/> to remove the link from the chain.
+    /// </summary>
+    public F1ClientBuilder WithRateLimit(TimeSpan minIntervalPerHost)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(minIntervalPerHost, TimeSpan.Zero);
+        _rateLimitInterval = minIntervalPerHost;
+        return this;
+    }
+
+    /// <summary>
     /// Adds a link to the HTTP Chain of Responsibility. The built-in chain is
     /// Retry → RateLimit → (your handlers, in the order added) → network.
     /// Takes a factory because a handler can only belong to one chain.
@@ -116,10 +142,13 @@ public sealed class F1ClientBuilder
     /// </summary>
     public F1Client Build()
     {
-        if (_httpClient is not null && (_httpTimeout is not null || _httpHandlerFactories.Count > 0))
+        var configuresHttpPipeline = _httpTimeout is not null || _retryPolicy is not null ||
+                                     _rateLimitInterval is not null || _httpHandlerFactories.Count > 0;
+        if (_httpClient is not null && configuresHttpPipeline)
         {
             throw new InvalidOperationException(
-                $"{nameof(WithHttpTimeout)} and {nameof(WithHttpHandler)} only apply to the built-in HttpClient. " +
+                $"{nameof(WithHttpTimeout)}, {nameof(WithRetryPolicy)}, {nameof(WithRateLimit)} and {nameof(WithHttpHandler)} " +
+                "only apply to the built-in HttpClient. " +
                 $"Configure the HttpClient passed to {nameof(WithHttpClient)} directly instead.");
         }
 
@@ -152,10 +181,24 @@ public sealed class F1ClientBuilder
 
     /// <summary>
     /// Links the handlers so each one's InnerHandler is the next: Retry → RateLimit → custom... → network.
+    /// The whole order of the chain is decided here and only here.
     /// </summary>
     private HttpMessageHandler BuildHttpHandlerChain()
     {
-        List<DelegatingHandler> links = [new RetryHandler(), new RateLimitHandler()];
+        List<DelegatingHandler> links = [];
+
+        var (maxRetries, baseDelay, maxDelay) = _retryPolicy ?? (RetryHandler.DefaultMaxRetries, null, null);
+        if (maxRetries > 0)
+        {
+            links.Add(new RetryHandler(maxRetries, baseDelay, maxDelay));
+        }
+
+        var rateLimitInterval = _rateLimitInterval ?? RateLimitHandler.DefaultMinInterval;
+        if (rateLimitInterval > TimeSpan.Zero)
+        {
+            links.Add(new RateLimitHandler(rateLimitInterval));
+        }
+
         links.AddRange(_httpHandlerFactories.Select(factory =>
             factory() ?? throw new InvalidOperationException("An HTTP handler factory returned null.")));
 

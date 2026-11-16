@@ -42,22 +42,22 @@ public abstract class DriverDataEnricher(IDriverProvider innerProvider) : IDrive
 
     /// <summary>
     /// Load the base driver data. Defaults to the wrapped provider.
-    /// <summary>
+    /// </summary>
     protected virtual Task<Driver?> FetchBaseAsync(string driverId, CancellationToken cancellationToken) =>
         _innerProvider.GetDriverByIdAsync(driverId, cancellationToken);
 
     /// <summary>
     /// Decide whether the driver has what enrichment needs
-    /// <summary>
+    /// </summary>
     protected abstract bool Validate(Driver driver);
 
     /// <summary>
     /// Add media data (description, images) from an external source.
-    /// <summary>
+    /// </summary>
     protected abstract Task<Driver> EnrichMediaAsync(Driver driver, CancellationToken cancellationToken);
 
     /// <summary>
     /// Final clean-up, always runs. Defaults to returning the driver unchanged.
-    /// <summary>
+    /// </summary>
     protected virtual Driver Normalize(Driver driver) => driver;
 }

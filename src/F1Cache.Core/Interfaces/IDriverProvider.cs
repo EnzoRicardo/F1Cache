@@ -7,13 +7,16 @@ namespace F1Cache.Core.Interfaces;
 /// </summary>
 public interface IDriverProvider
 {
+    /// <summary>Largest page Jolpica returns in one request.</summary>
+    const int MaxPageSize = 100;
+
     /// <summary>
     /// Retrieves a driver by their unique identifier.
     /// </summary>
     Task<Driver?> GetDriverByIdAsync(string driverId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Retrieves a paginated list of drivers (max limit per page in Jolpica is 100).
+    /// Retrieves a page of drivers (at most <see cref="MaxPageSize"/> per page).
     /// </summary>
-    Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = MaxPageSize, int offset = 0, CancellationToken cancellationToken = default);
 }

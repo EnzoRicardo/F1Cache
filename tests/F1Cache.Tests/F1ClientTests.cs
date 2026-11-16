@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text;
 using F1Cache.Core;
-using F1Cache.Core.Eviction;
+using F1Cache.Core.Caching.Eviction;
 using F1Cache.Core.Interfaces;
+using F1Cache.Core.Models;
+using F1Cache.Core.Providers.Enrichment;
 
 namespace F1Cache.Tests;
 
@@ -49,16 +51,6 @@ public class F1ClientTests
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             });
         }
-    }
-
-    private sealed class CountingObserver : ICacheObserver<string>
-    {
-        public int Hits, Misses, Evictions;
-
-        public void OnHit(string key) => Hits++;
-        public void OnMiss(string key) => Misses++;
-        public void OnExpire(string key) { }
-        public void OnEvict(string key) => Evictions++;
     }
 
     private static (F1ClientBuilder Builder, FakeApiHandler Handler) NewBuilder()
@@ -126,15 +118,15 @@ public class F1ClientTests
     [Fact]
     public async Task WithObserver_ReceivesCacheEvents()
     {
-        var observer = new CountingObserver();
+        var observer = new RecordingObserver();
         var (builder, _) = NewBuilder();
         using var client = builder.WithObserver(observer).Build();
 
         await client.GetDriverAsync("alonso");
         await client.GetDriverAsync("alonso");
 
-        Assert.Equal(1, observer.Misses);
-        Assert.Equal(1, observer.Hits);
+        Assert.Equal(1, observer.Count("miss"));
+        Assert.Equal(1, observer.Count("hit"));
     }
 
     [Fact]
@@ -219,5 +211,45 @@ public class F1ClientTests
 
         using var response = await httpClient.GetAsync("https://api.jolpi.ca/ergast/f1/drivers/alonso.json");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // ---- Custom enricher (Template Method extended by the client) ----
+
+    private sealed class LocalBioEnricher(IDriverProvider inner, IReadOnlyDictionary<string, string> bios)
+        : DriverDataEnricher(inner)
+    {
+        protected override bool Validate(Driver driver) => bios.ContainsKey(driver.Id);
+
+        protected override Task<Driver> EnrichMediaAsync(Driver driver, CancellationToken cancellationToken) =>
+            Task.FromResult(driver with { Description = bios[driver.Id] });
+
+        protected override Driver Normalize(Driver driver) => driver with { Description = driver.Description ?? "No bio." };
+    }
+
+    [Fact]
+    public async Task WithEnricher_ReplacesWikipediaAndResultIsStillCached()
+    {
+        var bios = new Dictionary<string, string> { ["alonso"] = "Two-time world champion." };
+        var (builder, handler) = NewBuilder();
+        using var client = builder.WithEnricher(jolpica => new LocalBioEnricher(jolpica, bios)).Build();
+
+        var alonso = await client.GetDriverAsync("alonso");
+        var hamilton = await client.GetDriverAsync("hamilton");
+        await client.GetDriverAsync("alonso");
+
+        Assert.Equal("Two-time world champion.", alonso!.Description);
+        Assert.Equal("No bio.", hamilton!.Description);
+        Assert.Equal(0, handler.WikipediaCalls);
+        Assert.Equal(2, handler.JolpicaCalls);
+        Assert.Equal(1, client.Statistics.Hits);
+    }
+
+    [Fact]
+    public void WithEnricher_FactoryReturningNull_ThrowsOnBuild()
+    {
+        var builder = F1Client.CreateBuilder().WithEnricher(_ => null!);
+
+        Assert.Throws<ArgumentNullException>(() => F1Client.CreateBuilder().WithEnricher(null!));
+        Assert.Throws<InvalidOperationException>(() => builder.Build());
     }
 }

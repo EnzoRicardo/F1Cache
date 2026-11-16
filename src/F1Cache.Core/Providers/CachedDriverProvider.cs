@@ -1,13 +1,13 @@
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
 
-namespace F1Cache.Core.Services;
+namespace F1Cache.Core.Providers;
 
 /// <summary>
 /// Decorator that adds in-memory caching to an IDriverProvider.
 /// Intercepts requests to check the cache first before delegating to the underlying provider.
 /// </summary>
-public class CachedDriverProvider(IDriverProvider innerProvider, ICache<string, Driver?> cache) : IDriverProvider
+public sealed class CachedDriverProvider(IDriverProvider innerProvider, ICache<string, Driver?> cache) : IDriverProvider
 {
     internal static readonly TimeSpan NegativeCacheTimeToLive = TimeSpan.FromSeconds(10);
 
@@ -18,21 +18,24 @@ public class CachedDriverProvider(IDriverProvider innerProvider, ICache<string, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
 
-        if (_cache.TryGet(driverId, out var cachedDriver))
+        // Jolpica ids are lowercase, so "Alonso" and " alonso " should share one cache entry.
+        var key = driverId.Trim().ToLowerInvariant();
+
+        if (_cache.TryGet(key, out var cachedDriver))
         {
             return cachedDriver;
         }
 
-        var driver = await _innerProvider.GetDriverByIdAsync(driverId, cancellationToken);
+        var driver = await _innerProvider.GetDriverByIdAsync(key, cancellationToken);
 
         // Always store the result to prevent cache penetration.
         // Misses get a short TTL so a driver added upstream shows up quickly.
-        _cache.Set(driverId, driver, driver is null ? NegativeCacheTimeToLive : null);
+        _cache.Set(key, driver, driver is null ? NegativeCacheTimeToLive : null);
 
         return driver;
     }
 
-    public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = IDriverProvider.MaxPageSize, int offset = 0, CancellationToken cancellationToken = default)
     {
         return _innerProvider.GetDriversPageAsync(limit, offset, cancellationToken);
     }

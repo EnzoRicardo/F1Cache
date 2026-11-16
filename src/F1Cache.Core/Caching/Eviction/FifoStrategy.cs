@@ -1,6 +1,6 @@
 using F1Cache.Core.Interfaces;
 
-namespace F1Cache.Core.Eviction;
+namespace F1Cache.Core.Caching.Eviction;
 
 /// <summary>
 /// First In, First Out: evicts the oldest inserted key, ignoring how it is used.

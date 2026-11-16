@@ -6,14 +6,6 @@ namespace F1Cache.Tests;
 
 public class JolpicaDriverProviderTests
 {
-    private class FakeHttpMessageHandler(HttpResponseMessage response) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(response);
-        }
-    }
-
     [Fact]
     public async Task GetDriverByIdAsync_ParsesJolpicaResponseCorrectly()
     {
@@ -45,7 +37,7 @@ public class JolpicaDriverProviderTests
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
 
-        var httpClient = new HttpClient(new FakeHttpMessageHandler(response));
+        var httpClient = new HttpClient(new ScriptedHttpHandler(response));
         var provider = new JolpicaDriverProvider(httpClient);
 
         // Act
@@ -71,7 +63,7 @@ public class JolpicaDriverProviderTests
     public async Task GetDriversPageAsync_WhenArgumentsInvalid_ThrowsArgumentOutOfRangeException(int limit, int offset)
     {
         // Arrange
-        var httpClient = new HttpClient(new FakeHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)));
+        var httpClient = new HttpClient(new ScriptedHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)));
         var provider = new JolpicaDriverProvider(httpClient);
 
         // Act & Assert
@@ -97,7 +89,7 @@ public class JolpicaDriverProviderTests
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
 
-        var httpClient = new HttpClient(new FakeHttpMessageHandler(response));
+        var httpClient = new HttpClient(new ScriptedHttpHandler(response));
         var provider = new JolpicaDriverProvider(httpClient);
 
         var result = await provider.GetDriversPageAsync(limit: 0, offset: 0);

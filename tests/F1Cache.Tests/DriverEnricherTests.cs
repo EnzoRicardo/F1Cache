@@ -1,8 +1,8 @@
 using F1Cache.Core.Interfaces;
-using F1Cache.Core.Managers;
+using F1Cache.Core.Caching;
 using F1Cache.Core.Models;
-using F1Cache.Core.Services;
-using F1Cache.Core.Services.Enrichment;
+using F1Cache.Core.Providers;
+using F1Cache.Core.Providers.Enrichment;
 
 namespace F1Cache.Tests;
 
@@ -13,20 +13,6 @@ public class DriverEnricherTests
         GivenName: "Fernando",
         FamilyName: "Alonso",
         WikipediaUrl: "http://en.wikipedia.org/wiki/Fernando_Alonso");
-
-    private sealed class FakeDriverProvider(Driver? driver) : IDriverProvider
-    {
-        public int Calls { get; private set; }
-
-        public Task<Driver?> GetDriverByIdAsync(string driverId, CancellationToken cancellationToken = default)
-        {
-            Calls++;
-            return Task.FromResult(driver);
-        }
-
-        public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<Driver>>(driver is null ? [] : [driver]);
-    }
 
     private sealed class FakeWikipediaProvider : IWikipediaProvider
     {

@@ -1,6 +1,6 @@
 using F1Cache.Core.Interfaces;
 
-namespace F1Cache.Core.Eviction;
+namespace F1Cache.Core.Caching.Eviction;
 
 /// <summary>
 /// Least Frequently Used: evicts the key with the fewest accesses; ties go to the least recently used of them.

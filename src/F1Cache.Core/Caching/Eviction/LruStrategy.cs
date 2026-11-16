@@ -1,6 +1,6 @@
 using F1Cache.Core.Interfaces;
 
-namespace F1Cache.Core.Eviction;
+namespace F1Cache.Core.Caching.Eviction;
 
 /// <summary>
 /// Least Recently Used: evicts the key that has gone longest without being read or written.

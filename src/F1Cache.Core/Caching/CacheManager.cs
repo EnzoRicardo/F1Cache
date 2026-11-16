@@ -1,11 +1,11 @@
-using F1Cache.Core.Eviction;
+using F1Cache.Core.Caching.Eviction;
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
-using F1Cache.Core.Observers;
+using F1Cache.Core.Caching.Observers;
 
-namespace F1Cache.Core.Managers;
+namespace F1Cache.Core.Caching;
 
-public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
+public sealed class CacheManager<TKey, TValue> : ICache<TKey, TValue>
     where TKey : notnull
 {
     public static readonly TimeSpan DefaultTimeToLive = TimeSpan.FromMinutes(1);
@@ -40,7 +40,7 @@ public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
 
     public void Set(TKey key, TValue item, TimeSpan? timeToLive = null)
     {
-        var entry = new CacheEntry<TValue>(item, timeToLive ?? _defaultTimeToLive, _timeProvider);
+        var entry = new CacheEntry<TValue>(item, _timeProvider.GetUtcNow(), timeToLive ?? _defaultTimeToLive);
         var evicted = false;
         TKey evictedKey = default!;
 
@@ -80,7 +80,7 @@ public class CacheManager<TKey, TValue> : ICache<TKey, TValue>
         {
             if (_cache.TryGetValue(key, out var entry))
             {
-                if (!entry.IsExpired())
+                if (!entry.IsExpired(_timeProvider.GetUtcNow()))
                 {
                     hit = entry;
                     _evictionStrategy.OnAccessed(key);

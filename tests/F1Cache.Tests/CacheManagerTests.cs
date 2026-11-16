@@ -1,4 +1,4 @@
-using F1Cache.Core.Managers;
+using F1Cache.Core.Caching;
 
 namespace F1Cache.Tests;
 

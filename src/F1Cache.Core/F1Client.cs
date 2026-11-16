@@ -1,6 +1,5 @@
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
-using F1Cache.Core.Observers;
 
 namespace F1Cache.Core;
 
@@ -9,7 +8,7 @@ namespace F1Cache.Core;
 /// the enrichment pipeline and the cache behind a few simple methods.
 /// Create one with <see cref="CreateBuilder"/>.
 /// </summary>
-public sealed class F1Client : IDisposable
+public sealed class F1Client : IF1Client
 {
     private readonly IDriverProvider _drivers;
     private readonly ICache<string, Driver?> _cache;
@@ -19,7 +18,7 @@ public sealed class F1Client : IDisposable
     internal F1Client(
         IDriverProvider drivers,
         ICache<string, Driver?> cache,
-        CacheStatisticsObserver<string> statistics,
+        ICacheStatistics statistics,
         HttpClient httpClient,
         bool ownsHttpClient)
     {
@@ -33,23 +32,18 @@ public sealed class F1Client : IDisposable
     /// <summary>Starts a fluent configuration of a new client.</summary>
     public static F1ClientBuilder CreateBuilder() => new();
 
-    /// <summary>Cache hit, miss, expiration and eviction counters for this client.</summary>
-    public CacheStatisticsObserver<string> Statistics { get; }
+    /// <inheritdoc />
+    public ICacheStatistics Statistics { get; }
 
-    /// <summary>
-    /// Gets a driver by Jolpica id (e.g., "alonso"), enriched with Wikipedia description and thumbnail.
-    /// Cached: repeated calls within the TTL make no network requests. Returns null if the driver does not exist.
-    /// </summary>
+    /// <inheritdoc />
     public Task<Driver?> GetDriverAsync(string driverId, CancellationToken cancellationToken = default) =>
         _drivers.GetDriverByIdAsync(driverId, cancellationToken);
 
-    /// <summary>
-    /// Gets a page of drivers (max 100 per page). Not cached and not enriched with Wikipedia data.
-    /// </summary>
-    public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default) =>
+    /// <inheritdoc />
+    public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = IDriverProvider.MaxPageSize, int offset = 0, CancellationToken cancellationToken = default) =>
         _drivers.GetDriversPageAsync(limit, offset, cancellationToken);
 
-    /// <summary>Removes every cached driver.</summary>
+    /// <inheritdoc />
     public void ClearCache() => _cache.Clear();
 
     public void Dispose()

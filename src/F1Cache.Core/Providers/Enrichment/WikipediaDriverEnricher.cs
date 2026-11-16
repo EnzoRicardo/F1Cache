@@ -3,13 +3,13 @@ using F1Cache.Core.Clients.Wikipedia;
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
 
-namespace F1Cache.Core.Services.Enrichment;
+namespace F1Cache.Core.Providers.Enrichment;
 
 /// <summary>
 /// Fills in a driver's description and thumbnail from Wikipedia.
 /// Wikipedia problems never fail the lookup: the driver is returned with placeholder values instead.
 /// </summary>
-public class WikipediaDriverEnricher(IDriverProvider innerProvider, IWikipediaProvider wikipediaProvider)
+public sealed class WikipediaDriverEnricher(IDriverProvider innerProvider, IWikipediaProvider wikipediaProvider)
     : DriverDataEnricher(innerProvider)
 {
     public const string MissingDescription = "N/A";
@@ -18,12 +18,14 @@ public class WikipediaDriverEnricher(IDriverProvider innerProvider, IWikipediaPr
 
     private readonly IWikipediaProvider _wikipediaProvider = wikipediaProvider ?? throw new ArgumentNullException(nameof(wikipediaProvider));
 
-    protected override bool Validate(Driver driver) =>
-        WikipediaSlug.FromUrl(driver.WikipediaUrl) is not null;
+    protected override bool Validate(Driver driver) => SlugOf(driver) is not null;
 
     protected override async Task<Driver> EnrichMediaAsync(Driver driver, CancellationToken cancellationToken)
     {
-        var slug = WikipediaSlug.FromUrl(driver.WikipediaUrl)!;
+        if (SlugOf(driver) is not { } slug)
+        {
+            return driver;
+        }
 
         try
         {
@@ -50,6 +52,8 @@ public class WikipediaDriverEnricher(IDriverProvider innerProvider, IWikipediaPr
         Description = string.IsNullOrWhiteSpace(driver.Description) ? MissingDescription : driver.Description,
         ThumbnailUrl = driver.ThumbnailUrl ?? PlaceholderImageBaseUrl + Uri.EscapeDataString(driver.FullName),
     };
+
+    private static string? SlugOf(Driver driver) => WikipediaSlug.FromUrl(driver.WikipediaUrl);
 
     private static bool IsWikipediaFailure(Exception ex, CancellationToken cancellationToken) =>
         ex is HttpRequestException or JsonException ||

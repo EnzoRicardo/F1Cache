@@ -1,27 +1,37 @@
-using F1Cache.Core.Models;
+using F1Cache.Core.Caching;
 
 namespace F1Cache.Tests;
 
 public class CacheEntryTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
     [Fact]
-    public void Constructor_WhenTimeToLiveIsNull_ExpiresAtIsNullAndNotExpired()
+    public void Constructor_WhenTimeToLiveIsNull_NeverExpires()
     {
-        var entry = new CacheEntry<string>("test-data", timeToLive: null);
+        var entry = new CacheEntry<string>("test-data", Now, timeToLive: null);
 
         Assert.Equal("test-data", entry.Value);
         Assert.Null(entry.ExpiresAt);
-        Assert.False(entry.IsExpired());
+        Assert.False(entry.IsExpired(Now.AddYears(100)));
     }
 
     [Fact]
-    public void Constructor_WhenTimeToLiveIsPositive_SetsExpiresAtInFuture()
+    public void Constructor_WhenTimeToLiveIsPositive_ExpiresAtCreationPlusTtl()
     {
-        var entry = new CacheEntry<string>("test-data", TimeSpan.FromMinutes(5));
+        var entry = new CacheEntry<string>("test-data", Now, TimeSpan.FromMinutes(5));
 
-        Assert.NotNull(entry.ExpiresAt);
-        Assert.True(entry.ExpiresAt > DateTimeOffset.UtcNow);
-        Assert.False(entry.IsExpired());
+        Assert.Equal(Now.AddMinutes(5), entry.ExpiresAt);
+    }
+
+    [Fact]
+    public void IsExpired_TrueFromTheExpiryInstantOnwards()
+    {
+        var entry = new CacheEntry<string>("test-data", Now, TimeSpan.FromMinutes(5));
+
+        Assert.False(entry.IsExpired(Now.AddMinutes(5).AddTicks(-1)));
+        Assert.True(entry.IsExpired(Now.AddMinutes(5)));
+        Assert.True(entry.IsExpired(Now.AddHours(1)));
     }
 
     [Theory]
@@ -32,6 +42,6 @@ public class CacheEntryTests
     {
         var invalidTtl = TimeSpan.FromSeconds(seconds);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new CacheEntry<string>("test-data", invalidTtl));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new CacheEntry<string>("test-data", Now, invalidTtl));
     }
 }

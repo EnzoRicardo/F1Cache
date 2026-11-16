@@ -6,22 +6,6 @@ namespace F1Cache.Tests;
 
 public class WikipediaSummaryProviderTests
 {
-    private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
-    {
-        public HttpRequestMessage? LastRequest { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            LastRequest = request;
-            return Task.FromResult(response);
-        }
-    }
-
-    private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
-    {
-        Content = new StringContent(json, Encoding.UTF8, "application/json")
-    };
-
     [Fact]
     public async Task GetSummaryAsync_ParsesDescriptionExtractAndImages()
     {
@@ -35,7 +19,7 @@ public class WikipediaSummaryProviderTests
           "originalimage": { "source": "https://upload.wikimedia.org/alonso.jpg", "width": 1200, "height": 1500 }
         }
         """;
-        var provider = new WikipediaSummaryProvider(new HttpClient(new RecordingHandler(Json(json))));
+        var provider = new WikipediaSummaryProvider(new HttpClient(new ScriptedHttpHandler(ScriptedHttpHandler.Json(json))));
 
         var summary = await provider.GetSummaryAsync("Fernando_Alonso");
 
@@ -51,7 +35,7 @@ public class WikipediaSummaryProviderTests
     public async Task GetSummaryAsync_PageWithoutImage_ReturnsNullImageUrls()
     {
         var json = """{ "title": "Some Driver", "description": "Racing driver" }""";
-        var provider = new WikipediaSummaryProvider(new HttpClient(new RecordingHandler(Json(json))));
+        var provider = new WikipediaSummaryProvider(new HttpClient(new ScriptedHttpHandler(ScriptedHttpHandler.Json(json))));
 
         var summary = await provider.GetSummaryAsync("Some_Driver");
 
@@ -63,7 +47,7 @@ public class WikipediaSummaryProviderTests
     [Fact]
     public async Task GetSummaryAsync_WhenNotFound_ReturnsNull()
     {
-        var provider = new WikipediaSummaryProvider(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.NotFound))));
+        var provider = new WikipediaSummaryProvider(new HttpClient(new ScriptedHttpHandler(new HttpResponseMessage(HttpStatusCode.NotFound))));
 
         Assert.Null(await provider.GetSummaryAsync("Does_Not_Exist"));
     }
@@ -71,7 +55,7 @@ public class WikipediaSummaryProviderTests
     [Fact]
     public async Task GetSummaryAsync_WhenServerError_Throws()
     {
-        var provider = new WikipediaSummaryProvider(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.InternalServerError))));
+        var provider = new WikipediaSummaryProvider(new HttpClient(new ScriptedHttpHandler(new HttpResponseMessage(HttpStatusCode.InternalServerError))));
 
         await Assert.ThrowsAsync<HttpRequestException>(() => provider.GetSummaryAsync("Fernando_Alonso"));
     }
@@ -79,7 +63,7 @@ public class WikipediaSummaryProviderTests
     [Fact]
     public async Task GetSummaryAsync_EncodesSlugAndSendsUserAgent()
     {
-        var handler = new RecordingHandler(Json("""{ "title": "Kimi Räikkönen" }"""));
+        var handler = new ScriptedHttpHandler(ScriptedHttpHandler.Json("""{ "title": "Kimi Räikkönen" }"""));
         var provider = new WikipediaSummaryProvider(new HttpClient(handler));
 
         await provider.GetSummaryAsync("Kimi Räikkönen");
@@ -96,7 +80,7 @@ public class WikipediaSummaryProviderTests
     [InlineData("   ")]
     public async Task GetSummaryAsync_BlankSlug_Throws(string slug)
     {
-        var provider = new WikipediaSummaryProvider(new HttpClient(new RecordingHandler(Json("{}"))));
+        var provider = new WikipediaSummaryProvider(new HttpClient(new ScriptedHttpHandler(ScriptedHttpHandler.Json("{}"))));
 
         await Assert.ThrowsAsync<ArgumentException>(() => provider.GetSummaryAsync(slug));
     }
@@ -117,6 +101,7 @@ public class WikipediaSummaryProviderTests
     [InlineData("https://example.com/wiki/Fernando_Alonso")]
     [InlineData("https://en.wikipedia.org/w/index.php?title=Fernando_Alonso")]
     [InlineData("https://en.wikipedia.org/wiki/")]
+    [InlineData("https://pt.wikipedia.org/wiki/Fernando_Alonso")]
     public void WikipediaSlug_FromUrl_InvalidUrl_ReturnsNull(string? url)
     {
         Assert.Null(WikipediaSlug.FromUrl(url));

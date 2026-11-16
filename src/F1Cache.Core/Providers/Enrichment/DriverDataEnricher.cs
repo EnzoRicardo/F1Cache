@@ -1,7 +1,7 @@
 using F1Cache.Core.Interfaces;
 using F1Cache.Core.Models;
 
-namespace F1Cache.Core.Services.Enrichment;
+namespace F1Cache.Core.Providers.Enrichment;
 
 /// <summary>
 /// Template Method: fixes the order of the driver resolution pipeline
@@ -37,7 +37,7 @@ public abstract class DriverDataEnricher(IDriverProvider innerProvider) : IDrive
     /// <summary>
     /// Pages are passed through unenriched.
     /// </summary>
-    public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = IDriverProvider.MaxPageSize, int offset = 0, CancellationToken cancellationToken = default) =>
         _innerProvider.GetDriversPageAsync(limit, offset, cancellationToken);
 
     /// <summary>

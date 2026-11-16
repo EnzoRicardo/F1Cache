@@ -9,7 +9,7 @@ namespace F1Cache.Core.Clients.Jolpica;
 /// HTTP provider that fetches Formula 1 driver details from the Jolpica (Ergast) API.
 /// Acts as an Adapter converting external Jolpica JSON data into library domain models.
 /// </summary>
-public class JolpicaDriverProvider(HttpClient httpClient) : IDriverProvider
+public sealed class JolpicaDriverProvider(HttpClient httpClient) : IDriverProvider
 {
     private const string BaseUrl = "https://api.jolpi.ca/ergast/f1/";
     private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
@@ -31,11 +31,11 @@ public class JolpicaDriverProvider(HttpClient httpClient) : IDriverProvider
         return driverDto?.ToDomain();
     }
 
-    public async Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = IDriverProvider.MaxPageSize, int offset = 0, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
         ArgumentOutOfRangeException.ThrowIfNegative(limit);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, IDriverProvider.MaxPageSize);
 
         var url = $"{BaseUrl}drivers.json?limit={limit}&offset={offset}";
 

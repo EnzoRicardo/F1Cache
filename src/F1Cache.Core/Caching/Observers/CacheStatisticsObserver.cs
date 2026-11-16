@@ -1,11 +1,12 @@
 using F1Cache.Core.Interfaces;
 
-namespace F1Cache.Core.Observers;
+namespace F1Cache.Core.Caching.Observers;
 
 /// <summary>
 /// Concrete observer that counts cache events and exposes the hit ratio. Thread-safe.
+/// Hand out <see cref="ICacheStatistics"/> to readers so they can't call the On* event methods.
 /// </summary>
-public sealed class CacheStatisticsObserver<TKey> : ICacheObserver<TKey>
+public sealed class CacheStatisticsObserver<TKey> : ICacheObserver<TKey>, ICacheStatistics
     where TKey : notnull
 {
     private long _hits;

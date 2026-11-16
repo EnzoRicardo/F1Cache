@@ -1,6 +1,6 @@
 using F1Cache.Core.Interfaces;
 
-namespace F1Cache.Core.Observers;
+namespace F1Cache.Core.Caching.Observers;
 
 /// <summary>
 /// Reusable observer registry that caches compose to broadcast lifecycle events.

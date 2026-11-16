@@ -1,13 +1,13 @@
+using F1Cache.Core.Caching;
+using F1Cache.Core.Caching.Eviction;
+using F1Cache.Core.Caching.Observers;
 using F1Cache.Core.Clients.Jolpica;
 using F1Cache.Core.Clients.Wikipedia;
-using F1Cache.Core.Eviction;
 using F1Cache.Core.Http;
 using F1Cache.Core.Interfaces;
-using F1Cache.Core.Managers;
 using F1Cache.Core.Models;
-using F1Cache.Core.Observers;
-using F1Cache.Core.Services;
-using F1Cache.Core.Services.Enrichment;
+using F1Cache.Core.Providers;
+using F1Cache.Core.Providers.Enrichment;
 
 namespace F1Cache.Core;
 
@@ -29,6 +29,7 @@ public sealed class F1ClientBuilder
     private (int MaxRetries, TimeSpan? BaseDelay, TimeSpan? MaxDelay)? _retryPolicy;
     private TimeSpan? _rateLimitInterval;
     private HttpMessageHandler? _primaryHttpHandler;
+    private Func<IDriverProvider, DriverDataEnricher>? _enricherFactory;
 
     internal F1ClientBuilder()
     {
@@ -79,6 +80,17 @@ public sealed class F1ClientBuilder
     {
         ArgumentNullException.ThrowIfNull(observer);
         _observers.Add(observer);
+        return this;
+    }
+
+    /// <summary>
+    /// Replaces the default Wikipedia enrichment with your own <see cref="DriverDataEnricher"/> subclass.
+    /// The factory receives the Jolpica provider your enricher should wrap; the result is still cached.
+    /// </summary>
+    public F1ClientBuilder WithEnricher(Func<IDriverProvider, DriverDataEnricher> enricherFactory)
+    {
+        ArgumentNullException.ThrowIfNull(enricherFactory);
+        _enricherFactory = enricherFactory;
         return this;
     }
 
@@ -142,34 +154,28 @@ public sealed class F1ClientBuilder
     /// </summary>
     public F1Client Build()
     {
-        var configuresHttpPipeline = _httpTimeout is not null || _retryPolicy is not null ||
-                                     _rateLimitInterval is not null || _httpHandlerFactories.Count > 0;
-        if (_httpClient is not null && configuresHttpPipeline)
-        {
-            throw new InvalidOperationException(
-                $"{nameof(WithHttpTimeout)}, {nameof(WithRetryPolicy)}, {nameof(WithRateLimit)} and {nameof(WithHttpHandler)} " +
-                "only apply to the built-in HttpClient. " +
-                $"Configure the HttpClient passed to {nameof(WithHttpClient)} directly instead.");
-        }
+        var (httpClient, ownsHttpClient) = BuildHttpClient();
+        var (cache, statistics) = BuildCache();
 
-        var ownsHttpClient = _httpClient is null;
-        var httpClient = _httpClient ?? new HttpClient(BuildHttpHandlerChain()) { Timeout = _httpTimeout ?? DefaultHttpTimeout };
-
-        var cache = new CacheManager<string, Driver?>(_timeToLive, _capacity, _evictionStrategyFactory());
-        var statistics = new CacheStatisticsObserver<string>();
-        cache.Attach(statistics);
-        foreach (var observer in _observers)
-        {
-            cache.Attach(observer);
-        }
-
-        var drivers = new CachedDriverProvider(
-            new WikipediaDriverEnricher(
-                new JolpicaDriverProvider(httpClient),
-                new WikipediaSummaryProvider(httpClient)),
-            cache);
+        var drivers = new CachedDriverProvider(BuildEnricher(httpClient), cache);
 
         return new F1Client(drivers, cache, statistics, httpClient, ownsHttpClient);
+    }
+
+    /// <summary>
+    /// Wraps the Jolpica adapter in the enricher: the custom one if configured, otherwise Wikipedia.
+    /// </summary>
+    private DriverDataEnricher BuildEnricher(HttpClient httpClient)
+    {
+        var jolpica = new JolpicaDriverProvider(httpClient);
+
+        if (_enricherFactory is null)
+        {
+            return new WikipediaDriverEnricher(jolpica, new WikipediaSummaryProvider(httpClient));
+        }
+
+        return _enricherFactory(jolpica)
+            ?? throw new InvalidOperationException("The enricher factory returned null.");
     }
 
     /// <summary>Replaces the network layer at the end of the chain. Tests use it to fake API responses.</summary>
@@ -177,6 +183,47 @@ public sealed class F1ClientBuilder
     {
         _primaryHttpHandler = handler;
         return this;
+    }
+
+    /// <summary>
+    /// Returns the caller's HttpClient as-is, or a new one running the handler chain (owned, so the client disposes it).
+    /// </summary>
+    private (HttpClient Client, bool Owned) BuildHttpClient()
+    {
+        if (_httpClient is null)
+        {
+            var client = new HttpClient(BuildHttpHandlerChain()) { Timeout = _httpTimeout ?? DefaultHttpTimeout };
+            return (client, Owned: true);
+        }
+
+        var configuresHttpPipeline = _httpTimeout is not null || _retryPolicy is not null ||
+                                     _rateLimitInterval is not null || _httpHandlerFactories.Count > 0;
+        if (configuresHttpPipeline)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(WithHttpTimeout)}, {nameof(WithRetryPolicy)}, {nameof(WithRateLimit)} and {nameof(WithHttpHandler)} " +
+                "only apply to the built-in HttpClient. " +
+                $"Configure the HttpClient passed to {nameof(WithHttpClient)} directly instead.");
+        }
+
+        return (_httpClient, Owned: false);
+    }
+
+    /// <summary>
+    /// Creates the cache with a fresh eviction strategy and attaches the statistics observer plus any custom ones.
+    /// </summary>
+    private (CacheManager<string, Driver?> Cache, ICacheStatistics Statistics) BuildCache()
+    {
+        var cache = new CacheManager<string, Driver?>(_timeToLive, _capacity, _evictionStrategyFactory());
+
+        var statistics = new CacheStatisticsObserver<string>();
+        cache.Attach(statistics);
+        foreach (var observer in _observers)
+        {
+            cache.Attach(observer);
+        }
+
+        return (cache, statistics);
     }
 
     /// <summary>

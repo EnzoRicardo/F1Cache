@@ -6,10 +6,10 @@ using F1Cache.Core.Models;
 namespace F1Cache.Core.Clients.Wikipedia;
 
 /// <summary>
-/// HTTP provider that fetches page summaries from the Wikipedia REST API.
+/// HTTP provider that fetches page summaries from the English Wikipedia REST API.
 /// Acts as an Adapter converting Wikipedia JSON into library domain models.
 /// </summary>
-public class WikipediaSummaryProvider(HttpClient httpClient) : IWikipediaProvider
+public sealed class WikipediaSummaryProvider(HttpClient httpClient) : IWikipediaProvider
 {
     private const string BaseUrl = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 

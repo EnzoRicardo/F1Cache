@@ -1,4 +1,4 @@
-namespace F1Cache.Core.Eviction;
+namespace F1Cache.Core.Caching.Eviction;
 
 /// <summary>
 /// Built-in eviction strategies selectable from <see cref="F1ClientBuilder"/>.

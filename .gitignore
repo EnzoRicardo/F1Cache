@@ -13,3 +13,5 @@
 # Sistema operacional
 .DS_Store
 Thumbs.db
+# Local NuGet package output
+nupkg/

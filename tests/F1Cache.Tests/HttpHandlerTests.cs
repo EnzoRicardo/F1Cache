@@ -9,26 +9,6 @@ namespace F1Cache.Tests;
 
 public class HttpHandlerTests
 {
-    /// <summary>End of the chain: replays scripted outcomes (status codes or exceptions) and records requests.</summary>
-    private sealed class ScriptedHandler(params object[] script) : HttpMessageHandler
-    {
-        private int _index;
-        public List<string> Requests { get; } = [];
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            Requests.Add(request.RequestUri!.ToString());
-            var step = script[Math.Min(_index++, script.Length - 1)];
-            return step switch
-            {
-                Exception ex => Task.FromException<HttpResponseMessage>(ex),
-                HttpResponseMessage message => Task.FromResult(message),
-                HttpStatusCode code => Task.FromResult(new HttpResponseMessage(code)),
-                _ => throw new InvalidOperationException(),
-            };
-        }
-    }
-
     private sealed class TagHandler(string tag, List<string> trail) : DelegatingHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -55,7 +35,7 @@ public class HttpHandlerTests
     [Fact]
     public async Task Retry_TransientErrorsThenSuccess_ReturnsSuccess()
     {
-        var terminal = new ScriptedHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
+        var terminal = new ScriptedHttpHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
         using var invoker = Chain(FastRetry(), terminal);
 
         using var response = await Get(invoker);
@@ -67,7 +47,7 @@ public class HttpHandlerTests
     [Fact]
     public async Task Retry_ExhaustsRetries_ReturnsLastResponse()
     {
-        var terminal = new ScriptedHandler(HttpStatusCode.InternalServerError);
+        var terminal = new ScriptedHttpHandler(HttpStatusCode.InternalServerError);
         using var invoker = Chain(FastRetry(maxRetries: 2), terminal);
 
         using var response = await Get(invoker);
@@ -82,7 +62,7 @@ public class HttpHandlerTests
     [InlineData(HttpStatusCode.BadRequest)]
     public async Task Retry_NonTransientStatus_IsNotRetried(HttpStatusCode status)
     {
-        var terminal = new ScriptedHandler(status);
+        var terminal = new ScriptedHttpHandler(status);
         using var invoker = Chain(FastRetry(), terminal);
 
         using var response = await Get(invoker);
@@ -94,7 +74,7 @@ public class HttpHandlerTests
     [Fact]
     public async Task Retry_NetworkErrorThenSuccess_ReturnsSuccess()
     {
-        var terminal = new ScriptedHandler(new HttpRequestException("reset"), HttpStatusCode.OK);
+        var terminal = new ScriptedHttpHandler(new HttpRequestException("reset"), HttpStatusCode.OK);
         using var invoker = Chain(FastRetry(), terminal);
 
         using var response = await Get(invoker);
@@ -106,7 +86,7 @@ public class HttpHandlerTests
     [Fact]
     public async Task Retry_NetworkErrorEveryTime_RethrowsAfterRetries()
     {
-        var terminal = new ScriptedHandler(new HttpRequestException("down"));
+        var terminal = new ScriptedHttpHandler(new HttpRequestException("down"));
         using var invoker = Chain(FastRetry(maxRetries: 1), terminal);
 
         await Assert.ThrowsAsync<HttpRequestException>(() => Get(invoker));
@@ -118,7 +98,7 @@ public class HttpHandlerTests
     {
         var tooManyRequests = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
         tooManyRequests.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromHours(1));
-        var terminal = new ScriptedHandler(tooManyRequests, HttpStatusCode.OK);
+        var terminal = new ScriptedHttpHandler(tooManyRequests, HttpStatusCode.OK);
         using var invoker = Chain(FastRetry(), terminal);
 
         using var response = await Get(invoker);
@@ -134,7 +114,7 @@ public class HttpHandlerTests
     {
         var clock = new FakeTimeProvider();
         var interval = TimeSpan.FromMilliseconds(250);
-        using var invoker = Chain(new RateLimitHandler(interval, clock), new ScriptedHandler(HttpStatusCode.OK));
+        using var invoker = Chain(new RateLimitHandler(interval, clock), new ScriptedHttpHandler(HttpStatusCode.OK));
 
         var first = Get(invoker);
         var second = Get(invoker);
@@ -159,7 +139,7 @@ public class HttpHandlerTests
     {
         var clock = new FakeTimeProvider();
         var interval = TimeSpan.FromMilliseconds(250);
-        using var invoker = Chain(new RateLimitHandler(interval, clock), new ScriptedHandler(HttpStatusCode.OK));
+        using var invoker = Chain(new RateLimitHandler(interval, clock), new ScriptedHttpHandler(HttpStatusCode.OK));
 
         (await Get(invoker)).Dispose();
         clock.Advance(TimeSpan.FromSeconds(10));
@@ -174,7 +154,7 @@ public class HttpHandlerTests
     public async Task RateLimit_DifferentHosts_DoNotWaitOnEachOther()
     {
         var clock = new FakeTimeProvider();
-        using var invoker = Chain(new RateLimitHandler(TimeSpan.FromSeconds(1), clock), new ScriptedHandler(HttpStatusCode.OK));
+        using var invoker = Chain(new RateLimitHandler(TimeSpan.FromSeconds(1), clock), new ScriptedHttpHandler(HttpStatusCode.OK));
 
         var jolpica = Get(invoker, "https://api.jolpi.ca/x");
         var wikipedia = Get(invoker, "https://en.wikipedia.org/x");
@@ -191,7 +171,7 @@ public class HttpHandlerTests
     public async Task Logging_WritesMethodUrlAndStatus()
     {
         var lines = new List<string>();
-        using var invoker = Chain(new LoggingHandler(lines.Add), new ScriptedHandler(HttpStatusCode.NotFound));
+        using var invoker = Chain(new LoggingHandler(lines.Add), new ScriptedHttpHandler(HttpStatusCode.NotFound));
 
         using var _ = await Get(invoker, "https://api.jolpi.ca/drivers/nobody.json");
 
@@ -206,7 +186,7 @@ public class HttpHandlerTests
     {
         var trail = new List<string>();
         var driverJson = """{ "MRData": { "DriverTable": { "Drivers": [ { "driverId": "alonso", "givenName": "Fernando", "familyName": "Alonso" } ] } } }""";
-        var terminal = new ScriptedHandler(
+        var terminal = new ScriptedHttpHandler(
             HttpStatusCode.ServiceUnavailable,
             new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(driverJson, Encoding.UTF8, "application/json") });
 
@@ -227,7 +207,7 @@ public class HttpHandlerTests
     [Fact]
     public async Task Builder_WithZeroRetries_DoesNotRetry()
     {
-        var terminal = new ScriptedHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
+        var terminal = new ScriptedHttpHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
 
         using var client = F1Client.CreateBuilder()
             .WithRetryPolicy(maxRetries: 0)

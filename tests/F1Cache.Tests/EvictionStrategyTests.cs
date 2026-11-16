@@ -1,21 +1,11 @@
-using F1Cache.Core.Eviction;
+using F1Cache.Core.Caching.Eviction;
 using F1Cache.Core.Interfaces;
-using F1Cache.Core.Managers;
+using F1Cache.Core.Caching;
 
 namespace F1Cache.Tests;
 
 public class EvictionStrategyTests
 {
-    private sealed class EvictionRecorder : ICacheObserver<string>
-    {
-        public List<string> Evicted { get; } = [];
-
-        public void OnHit(string key) { }
-        public void OnMiss(string key) { }
-        public void OnExpire(string key) { }
-        public void OnEvict(string key) => Evicted.Add(key);
-    }
-
     // ---- Strategies in isolation ----
 
     [Fact]
@@ -176,28 +166,28 @@ public class EvictionStrategyTests
     public void Cache_Eviction_NotifiesObservers()
     {
         var cache = new CacheManager<string, int>(capacity: 1);
-        var recorder = new EvictionRecorder();
+        var recorder = new RecordingObserver();
         cache.Attach(recorder);
 
         cache.Set("a", 1);
         cache.Set("b", 2);
         cache.Set("c", 3);
 
-        Assert.Equal(["a", "b"], recorder.Evicted);
+        Assert.Equal(["a", "b"], recorder.Keys("evict"));
     }
 
     [Fact]
     public void Cache_OverwritingExistingKey_DoesNotEvict()
     {
         var cache = new CacheManager<string, int>(capacity: 2);
-        var recorder = new EvictionRecorder();
+        var recorder = new RecordingObserver();
         cache.Attach(recorder);
 
         cache.Set("a", 1);
         cache.Set("b", 2);
         cache.Set("a", 10);
 
-        Assert.Empty(recorder.Evicted);
+        Assert.Empty(recorder.Keys("evict"));
         Assert.True(cache.TryGet("a", out var value));
         Assert.Equal(10, value);
     }
@@ -207,7 +197,7 @@ public class EvictionStrategyTests
     {
         var clock = new ManualTimeProvider();
         var cache = new CacheManager<string, int>(capacity: 2, timeProvider: clock);
-        var recorder = new EvictionRecorder();
+        var recorder = new RecordingObserver();
         cache.Attach(recorder);
 
         cache.Set("a", 1);
@@ -219,7 +209,7 @@ public class EvictionStrategyTests
         cache.Set("c", 3);
         cache.Set("d", 4);
 
-        Assert.Empty(recorder.Evicted);
+        Assert.Empty(recorder.Keys("evict"));
     }
 
     [Theory]

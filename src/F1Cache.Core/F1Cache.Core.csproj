@@ -6,6 +6,26 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- NuGet package: `dotnet pack src/F1Cache.Core -c Release` produces F1Cache.<version>.nupkg -->
+  <PropertyGroup>
+    <PackageId>F1Cache</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Giovani Nota Simões;Enzo Ricardo de Oliveira Leitão;Sarah Maneira;Luan Vieira Lucho</Authors>
+    <Description>Formula 1 driver data (Jolpica + Wikipedia) behind an extensible in-memory cache with pluggable eviction strategies, cache observers and a resilient HTTP pipeline.</Description>
+    <PackageTags>formula1;f1;cache;jolpica;ergast;wikipedia</PackageTags>
+    <RepositoryUrl>https://github.com/EnzoRicardo/F1Cache</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Ship the XML doc comments so consumers see them in IntelliSense. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="F1Cache.Tests" />
   </ItemGroup>

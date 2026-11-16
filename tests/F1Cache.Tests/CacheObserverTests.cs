@@ -1,23 +1,13 @@
 using F1Cache.Core.Interfaces;
-using F1Cache.Core.Managers;
+using F1Cache.Core.Caching;
 using F1Cache.Core.Models;
-using F1Cache.Core.Observers;
-using F1Cache.Core.Services;
+using F1Cache.Core.Caching.Observers;
+using F1Cache.Core.Providers;
 
 namespace F1Cache.Tests;
 
 public class CacheObserverTests
 {
-    private sealed class RecordingObserver : ICacheObserver<string>
-    {
-        public List<string> Events { get; } = [];
-
-        public void OnHit(string key) => Events.Add($"hit:{key}");
-        public void OnMiss(string key) => Events.Add($"miss:{key}");
-        public void OnExpire(string key) => Events.Add($"expire:{key}");
-        public void OnEvict(string key) => Events.Add($"evict:{key}");
-    }
-
     [Fact]
     public void TryGet_LiveEntry_NotifiesHit()
     {
@@ -168,21 +158,12 @@ public class CacheObserverTests
         var cache = new CacheManager<string, Driver?>();
         var stats = new CacheStatisticsObserver<string>();
         cache.Attach(stats);
-        var provider = new CachedDriverProvider(new StubDriverProvider(), cache);
+        var provider = new CachedDriverProvider(new FakeDriverProvider(new Driver("alonso", "Fernando", "Alonso")), cache);
 
         await provider.GetDriverByIdAsync("alonso");
         await provider.GetDriverByIdAsync("alonso");
 
         Assert.Equal(1, stats.Misses);
         Assert.Equal(1, stats.Hits);
-    }
-
-    private sealed class StubDriverProvider : IDriverProvider
-    {
-        public Task<Driver?> GetDriverByIdAsync(string driverId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Driver?>(new Driver(driverId, "Fernando", "Alonso"));
-
-        public Task<IReadOnlyList<Driver>> GetDriversPageAsync(int limit = 100, int offset = 0, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<Driver>>([]);
     }
 }

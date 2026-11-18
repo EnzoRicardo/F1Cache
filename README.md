@@ -3,7 +3,7 @@ Enzo Ricardo de Oliveira Leitão
 Sarah Maneira
 Luan Vieira Lucho
 
-YouTube Link: PLACEHOLDER
+YouTube Link: https://youtu.be/P4IDRlJyyRs
 
 # 🏎️ F1Cache
 
